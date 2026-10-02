@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedCLIP Inference</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 40px; color: #333; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        h2 { text-align: center; color: #2c3e50; }
+        .form-group { margin-bottom: 20px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; }
+        input[type="file"], input[type="number"], select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; background-color: #3498db; color: white; padding: 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #2980b9; }
+        #results { margin-top: 30px; display: none; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; border-bottom: 1px solid #ddd; text-align: left; }
+        th { background-color: #f8f9fa; }
+        .pred-1 { color: #e74c3c; font-weight: bold; }
+        .pred-0 { color: #27ae60; }
+        #loading { display: none; text-align: center; margin-top: 20px; font-weight: bold; color: #f39c12; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Medical Image Inference</h2>
+    <form id="uploadForm">
+        <div class="form-group">
+            <label for="image">Upload Image (PNG, JPG, JPEG):</label>
+            <input type="file" id="image" name="image" accept="image/*" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="plane">Select Plane:</label>
+            <select id="plane" name="plane" required>
+                <option value="axial">Axial</option>
+                <option value="sagittal">Sagittal</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="threshold">Positivity Threshold (0.0 to 1.0):</label>
+            <input type="number" id="threshold" name="threshold" min="0" max="1" step="0.01" value="0.50" required>
+        </div>
+        
+        <button type="submit">Run Inference</button>
+    </form>
+
+    <div id="loading">Running inference, please wait...</div>
+
+    <div id="results">
+        <h3>Results (<span id="result-plane"></span>)</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Pathology</th>
+                    <th>Probability</th>
+                    <th id="table-header-thresh">Prediction</th>
+                </tr>
+            </thead>
+            <tbody id="results-table-body">
+                <!-- Data populated by JS -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const form = document.getElementById('uploadForm');
+        const formData = new FormData(form);
+        const thresholdInput = document.getElementById('threshold').value;
+        
+        document.getElementById('loading').style.display = 'block';
+        document.getElementById('results').style.display = 'none';
+        
+        // Dynamically update the table header to show the selected threshold
+        document.getElementById('table-header-thresh').innerText = `Prediction (Thresh: ${thresholdInput})`;
+        
+        try {
+            const response = await fetch('/predict', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            
+            if(data.success) {
+                document.getElementById('result-plane').innerText = data.plane.charAt(0).toUpperCase() + data.plane.slice(1);
+                const tbody = document.getElementById('results-table-body');
+                tbody.innerHTML = '';
+                
+                data.results.forEach(item => {
+                    const tr = document.createElement('tr');
+                    const predClass = item.prediction === 1 ? 'pred-1' : 'pred-0';
+                    const predText = item.prediction === 1 ? 'Positive' : 'Negative';
+                    
+                    tr.innerHTML = `
+                        <td>${item.label}</td>
+                        <td>${(item.probability * 100).toFixed(2)}%</td>
+                        <td class="${predClass}">${predText}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+                
+                document.getElementById('results').style.display = 'block';
+            } else {
+                alert("Error: " + data.error);
+            }
+        } catch (error) {
+            alert("An error occurred. Check the console.");
+            console.error(error);
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    });
+</script>
+
+</body>
+</html>
